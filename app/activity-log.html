@@ -46,9 +46,11 @@ button:disabled{opacity:.5;cursor:default}
 .entry-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .entry h3{margin:0;font-size:15px}
 button.small{font-size:13px;padding:4px 12px}
-.entry p{margin:0;white-space:pre-wrap}
-.entry.skip{background:transparent;border-style:dashed}
-.entry.skip p{color:var(--skip)}
+.entry p{margin:0;white-space:pre-wrap;font-size:14px;line-height:1.65}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:640px){.grid{grid-template-columns:minmax(0,1fr)}}
+.wrap.wide{max-width:920px}
+.skipline{color:var(--skip);font-size:13px;margin:0}
 .tabs{display:flex;gap:4px;background:var(--line);padding:3px;border-radius:9px;align-self:flex-start}
 .tab{font:inherit;font-size:13px;border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:7px;cursor:pointer}
 .tab[aria-pressed="true"]{background:var(--surface);color:var(--fg)}
@@ -91,6 +93,7 @@ function go(j){S.i=j;err="";save();render()}
 function render(){
   const date=new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
   const head=`<header><h1>활동지</h1><span class="date">${date}</span></header>`;
+  $.classList.toggle("wide",S.finished);
   if(S.finished){$.innerHTML=head+summary();bind();return}
   const strip=`<nav class="strip" aria-label="아이 목록">`+ROSTER.map((c,j)=>{
     const cls=S.items[j].skipped?"skipped":has(j)?"filled":"";
@@ -111,9 +114,12 @@ function render(){
   $.innerHTML=head+strip+body+fin;bind();
 }
 function summary(){
-  const parts=ROSTER.map((c,j)=>has(j)?`<div class="entry"><div class="entry-head"><h3>${esc(c.n)}</h3><button class="btn small" data-copy="${j}">복사</button></div><p>${esc(S.items[j].text||("키워드: "+S.items[j].kw.trim()))}</p></div>`:`<div class="entry skip"><div class="entry-head"><h3>${esc(c.n)}</h3></div><p>건너뜀</p></div>`).join("");
+  const done=ROSTER.map((c,j)=>has(j)?`<div class="entry"><div class="entry-head"><h3>${esc(c.n)}</h3><button class="btn small" data-copy="${j}">복사</button></div><p>${esc(S.items[j].text||("키워드: "+S.items[j].kw.trim()))}</p></div>`:"").join("");
+  const skipped=ROSTER.filter((c,j)=>!has(j)).map(c=>c.n);
   return `<div class="card summary"><p class="q">오늘 활동지 정리</p>
-    <p class="hint">아이별 복사 버튼으로 한 명씩 복사할 수 있습니다.</p>${parts}
+    <p class="hint">아이별 복사 버튼으로 한 명씩 복사할 수 있습니다.</p>
+    <div class="grid">${done}</div>
+    ${skipped.length?`<p class="skipline">건너뜀: ${skipped.map(esc).join(", ")}</p>`:""}
     <div class="row"><button class="btn" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button></div>
     ${sample?"":`<p class="hint">자동 작성이 꺼져 있어 키워드만 정리했습니다. 이 내용을 대화창에 붙여 넣고 아이별 일지로 써 달라고 요청하세요.</p>`}</div>`;
 }
