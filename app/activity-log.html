@@ -132,6 +132,9 @@ const put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
 // R: 명단(오래 보관). D: 오늘 작성 상태(날짜별, 목록별, 아이 id별)
 let R=load(RKEY);
 if(!R||!Array.isArray(R.lists)||!R.lists.length){R={lists:[{id:uid(),name:"1번 목록",kids:SEED.map(k=>({id:uid(),...k}))}],cur:null}}
+// 미리 넣어 둘 명단이 있으면 처음 한 번만 '우리 반' 목록으로 추가한다.
+const REAL=[]; // 실제 명단은 저장소에 두지 않고 화면의 명단 관리에서 입력한다.
+if(!R.seededReal&&REAL.length){const l={id:uid(),name:"우리 반",kids:REAL.map(([n,age,sex])=>({id:uid(),n,age,sex}))};R.lists.push(l);R.cur=l.id;R.seededReal=true}
 if(!R.cur||!R.lists.some(l=>l.id===R.cur))R.cur=R.lists[0].id;
 let D=load(DKEY);
 if(!D||!D.byList){
@@ -199,7 +202,9 @@ function manager(){
     <div class="field"><span>목록 이름</span><input class="inp" id="lname" value="${esc(l.name)}" aria-label="목록 이름"></div>
     <div class="klabel"><span>이름</span><span>나이</span><span>성별</span><span></span></div>
     ${rows||`<p class="hint">아이를 추가해 주세요.</p>`}
-    <div class="row"><button class="btn" id="addkid">+ 아이 추가</button></div></div>
+    <div class="row"><button class="btn" id="addkid">+ 아이 추가</button></div>
+    <div class="field"><span>여러 명 한꺼번에 추가 (한 줄에 한 명: 이름/나이/성별)</span><textarea id="bulk" aria-label="여러 명 추가"></textarea></div>
+    <div class="row"><button class="btn" id="bulkadd">붙여넣은 명단 추가</button></div></div>
     <div class="card"><div class="row"><button class="btn primary" id="mgrdone">완료</button>
     <button class="btn" id="newlist">+ 새 목록</button>
     ${R.lists.length>1?`<button class="btn ${conf==="L"+l.id?"danger":""}" id="dellist">${conf==="L"+l.id?"정말 이 목록 삭제":"이 목록 삭제"}</button>`:""}</div>
@@ -254,6 +259,10 @@ function bind(){
     if(conf===k.id){L().kids=kids().filter(x=>x.id!==k.id);dropKid(k.id);conf="";save()}else conf=k.id;
     render()});
   if(g("addkid"))g("addkid").onclick=()=>{L().kids.push({id:uid(),n:"",age:5,sex:"남"});conf="";focusLast=true;saveR();render()};
+  if(g("bulkadd"))g("bulkadd").onclick=()=>{
+    const rows=g("bulk").value.split(/\r?\n/).map(s=>s.split(/[\/,\t]/).map(x=>x.trim())).filter(r=>r[0]);
+    rows.forEach(r=>{const a=parseInt(r[1],10);L().kids.push({id:uid(),n:r[0],age:isNaN(a)?"":a,sex:(r[2]||"").startsWith("여")?"여":"남"})});
+    if(rows.length){conf="";saveR();render()}};
   if(g("newlist"))g("newlist").onclick=()=>{const l={id:uid(),name:"새 목록",kids:[]};R.lists.push(l);R.cur=l.id;conf="";focusLast=false;saveR();render();const n=g("lname");if(n){n.focus();n.select()}};
   if(g("dellist"))g("dellist").onclick=()=>{
     const l=L();
