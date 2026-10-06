@@ -70,12 +70,20 @@ button.small{font-size:16px;padding:1px 14px;border-width:2.5px;box-shadow:2px 3
 .skipline{color:var(--skip);font-size:16px;margin:0}
 .hint{color:var(--muted);font-size:15px;margin:0}
 @media (prefers-reduced-motion:reduce){button.btn{transition:none}}
+
+.listbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.inp{font:inherit;font-size:18px;color:var(--fg);background:var(--bg);border:2.5px dashed var(--muted);border-radius:14px 22px 16px 24px/22px 14px 24px 16px;padding:4px 12px;min-width:0;width:100%}
+.krow{display:grid;grid-template-columns:minmax(0,1fr) 62px 64px auto;gap:8px;align-items:center}
+.klabel{display:grid;grid-template-columns:minmax(0,1fr) 62px 64px auto;gap:8px;color:var(--muted);font-size:14px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field span{color:var(--muted);font-size:15px}
+button.danger{color:var(--red);border-color:var(--red);box-shadow:2px 3px 0 rgba(228,87,75,.3)}
 </style>
 
 <div class="wrap" id="app"></div>
 
 <script>
-const ROSTER=[
+const SEED=[
   {n:"앤디",age:5,sex:"남"},{n:"비니",age:6,sex:"여"},{n:"쿠시",age:5,sex:"여"},
   {n:"데니",age:4,sex:"남"},{n:"에반",age:6,sex:"남"},{n:"퍼지",age:7,sex:"여"},
   {n:"고유",age:5,sex:"남"},{n:"헨디",age:6,sex:"여"},{n:"이루",age:7,sex:"남"}
@@ -88,45 +96,90 @@ const TONE=`너는 어린이집 담임 교사다. 아래 키워드나 문장을 
 - 아이를 평가하거나 단정하지 않고 관찰한 모습 중심으로 쓴다. 부정적인 행동은 비난 없이 부드럽게 쓴다.
 - 식사, 낮잠, 건강 내용은 교사가 말한 것만 쓴다.
 - 제목, 설명, 머리말 없이 일지 본문만 출력한다. 첫 줄은 '오늘' 활동으로 시작한다.`;
-const KEY="activity-log-v2-"+new Date().toISOString().slice(0,10);
-// item: kw = 입력한 키워드, skipped = 건너뜀, text = 작성된 일지, gen = 일지를 만들 때 쓴 키워드
-let S={i:0,items:ROSTER.map(()=>({kw:"",skipped:false,text:"",gen:""})),finished:false};
-try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.items&&s.items.length===ROSTER.length)S=s}catch(e){}
-let sample=null,busy=false,err="",progress="";
+const today=new Date().toISOString().slice(0,10);
+const RKEY="activity-roster-v1",DKEY="activity-day-v3-"+today,OLDKEY="activity-log-v2-"+today;
+const uid=()=>"k"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const load=k=>{try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}};
+const put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+// R: 명단(오래 보관). D: 오늘 작성 상태(날짜별, 목록별, 아이 id별)
+let R=load(RKEY);
+if(!R||!Array.isArray(R.lists)||!R.lists.length){R={lists:[{id:uid(),name:"1번 목록",kids:SEED.map(k=>({id:uid(),...k}))}],cur:null}}
+if(!R.cur||!R.lists.some(l=>l.id===R.cur))R.cur=R.lists[0].id;
+let D=load(DKEY);
+if(!D||!D.byList){
+  D={byList:{}};
+  const old=load(OLDKEY); // 이전 버전에서 오늘 입력한 내용을 첫 목록으로 옮긴다
+  if(old&&old.items&&old.items.length===R.lists[0].kids.length){
+    const l=R.lists[0];
+    D.byList[l.id]={i:old.i||0,finished:!!old.finished,items:Object.fromEntries(l.kids.map((k,j)=>[k.id,{kw:old.items[j].kw||"",skipped:!!old.items[j].skipped,text:old.items[j].text||"",gen:old.items[j].gen||""}]))};
+  }
+}
+let sample=null,busy=false,err="",progress="",mgr=false,conf="",focusLast=false;
 const $=document.getElementById("app");
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
-const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const has=j=>S.items[j].kw.trim().length>0&&!S.items[j].skipped;
-const count=()=>ROSTER.filter((c,j)=>has(j)).length;
-const prompt=(c,kw)=>`${TONE}\n\n아이: ${c.n} (${c.age}세, ${c.sex})\n교사가 적은 오늘 활동: ${kw}\n\n${c.n}의 오늘 활동일지 본문만 쓴다.`;
-function go(j){S.i=j;err="";save();render()}
+const saveR=()=>put(RKEY,R),saveD=()=>put(DKEY,D),save=()=>{saveR();saveD()};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const L=()=>R.lists.find(l=>l.id===R.cur);
+const kids=()=>L().kids;
+const day=()=>D.byList[R.cur]||(D.byList[R.cur]={i:0,finished:false,items:{}});
+const it=k=>day().items[k.id]||(day().items[k.id]={kw:"",skipped:false,text:"",gen:""});
+const has=k=>it(k).kw.trim().length>0&&!it(k).skipped;
+const count=()=>kids().filter(has).length;
+const label=k=>k.n.trim()||"(이름 없음)";
+const info=k=>[k.age?k.age+"세":"",k.sex||""].filter(Boolean).join(" ");
+const prompt=(k,kw)=>`${TONE}\n\n아이: ${label(k)}${info(k)?` (${info(k).replace(" ",", ")})`:""}\n교사가 적은 오늘 활동: ${kw}\n\n${label(k)}의 오늘 활동일지 본문만 쓴다.`;
+function go(j){day().i=j;err="";saveD();render()}
+function clampI(){const d=day(),n=kids().length;if(d.i>=n)d.i=Math.max(0,n-1)}
 
+function listbar(){
+  return `<div class="listbar" role="group" aria-label="명단 목록">`+R.lists.map(l=>`<button class="chip" data-list="${l.id}" aria-current="${l.id===R.cur}">${esc(l.name||"이름 없는 목록")}</button>`).join("")+
+   `<button class="btn small ghost" id="mgr">${mgr?"명단 닫기":"명단 관리"}</button></div>`;
+}
 function render(){
   const date=new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
   const head=`<header><h1>활동지</h1><span class="date">${date}</span></header>`;
-  $.classList.toggle("wide",S.finished);
-  if(S.finished){$.innerHTML=head+summary();bind();return}
-  const strip=`<nav class="strip" aria-label="아이 목록">`+ROSTER.map((c,j)=>{
-    const cls=S.items[j].skipped?"skipped":has(j)?"filled":"";
-    const tag=S.items[j].skipped?"건너뜀":has(j)?"입력됨":"";
-    return `<button class="chip ${cls}" data-go="${j}" aria-current="${j===S.i}">${esc(c.n)}${tag?`<small>${tag}</small>`:""}</button>`}).join("")+`</nav>`;
-  const c=ROSTER[S.i],it=S.items[S.i],last=S.i===ROSTER.length-1;
-  const body=`<div class="card"><p class="meta">${S.i+1}/${ROSTER.length} · ${c.age}세 ${c.sex}</p>
-    <p class="q">오늘 '${esc(c.n)}'의 하루는 어땠나요?</p>
-    <textarea id="kw" aria-label="활동 키워드" ${busy?"disabled":""}>${esc(it.kw)}</textarea>
+  clampI();
+  const d=day();
+  $.classList.toggle("wide",d.finished&&!mgr);
+  if(mgr){$.innerHTML=head+listbar()+manager();bind();if(focusLast){focusLast=false;const a=document.querySelectorAll("[data-kn]");if(a.length)a[a.length-1].focus()}return}
+  if(!kids().length){$.innerHTML=head+listbar()+`<div class="card"><p class="q">이 목록에는 아직 아이가 없어요</p><p class="hint">명단 관리에서 아이를 추가해 주세요.</p><div class="row"><button class="btn primary" id="mgr2">아이 추가하기</button></div></div>`;bind();return}
+  if(d.finished){$.innerHTML=head+listbar()+summary();bind();return}
+  const strip=`<nav class="strip" aria-label="아이 목록">`+kids().map((k,j)=>{
+    const cls=it(k).skipped?"skipped":has(k)?"filled":"";
+    const tag=it(k).skipped?"건너뜀":has(k)?"입력됨":"";
+    return `<button class="chip ${cls}" data-go="${j}" aria-current="${j===d.i}">${esc(label(k))}${tag?`<small>${tag}</small>`:""}</button>`}).join("")+`</nav>`;
+  const k=kids()[d.i],cur=it(k),last=d.i===kids().length-1;
+  const body=`<div class="card"><p class="meta">${d.i+1}/${kids().length}${info(k)?" · "+info(k):""}</p>
+    <p class="q">오늘 '${esc(label(k))}'의 하루는 어땠나요?</p>
+    <textarea id="kw" aria-label="활동 키워드" ${busy?"disabled":""}>${esc(cur.kw)}</textarea>
     <p class="hint">여기서는 일지를 만들지 않고 입력만 저장합니다. 모두 적은 뒤 아래 버튼으로 한 번에 작성합니다.</p>
     <div class="row"><button class="btn primary" id="next" ${busy?"disabled":""}>${last?"저장":"다음 아이"}</button>
-    <button class="btn ghost" id="skip" ${busy?"disabled":""}>${it.skipped?"건너뛰기 취소":"건너뛰기"}</button></div></div>`;
+    <button class="btn ghost" id="skip" ${busy?"disabled":""}>${cur.skipped?"건너뛰기 취소":"건너뛰기"}</button></div></div>`;
   const n=count();
   const fin=`<div class="card">${sample?"":`<div class="note">자동 작성을 쓸 수 없는 화면입니다. 키워드를 정리해 대화창에 붙여 넣을 수 있게 만듭니다.</div>`}
     ${err?`<div class="note">${esc(err)}</div>`:""}
     <div class="row"><button class="btn primary" id="batchmake" ${busy||!n?"disabled":""}>${busy?progress:(sample?`${n}명 한 번에 작성`:`${n}명 정리하기`)}</button></div>
     <p class="hint">적지 않은 아이는 자동으로 건너뜁니다.</p></div>`;
-  $.innerHTML=head+strip+body+fin;bind();
+  $.innerHTML=head+listbar()+strip+body+fin;bind();
+}
+function manager(){
+  const l=L();
+  const rows=l.kids.map((k,j)=>`<div class="krow"><input class="inp" data-kn="${j}" value="${esc(k.n)}" placeholder="이름" aria-label="이름">
+    <input class="inp" data-ka="${j}" type="number" min="0" max="12" value="${esc(k.age??"")}" aria-label="나이">
+    <select class="inp" data-ks="${j}" aria-label="성별"><option value="남" ${k.sex==="남"?"selected":""}>남</option><option value="여" ${k.sex==="여"?"selected":""}>여</option></select>
+    <button class="btn small ${conf===k.id?"danger":""}" data-kdel="${j}">${conf===k.id?"정말 삭제":"삭제"}</button></div>`).join("");
+  return `<div class="card"><p class="q">명단 관리</p>
+    <div class="field"><span>목록 이름</span><input class="inp" id="lname" value="${esc(l.name)}" aria-label="목록 이름"></div>
+    <div class="klabel"><span>이름</span><span>나이</span><span>성별</span><span></span></div>
+    ${rows||`<p class="hint">아이를 추가해 주세요.</p>`}
+    <div class="row"><button class="btn" id="addkid">+ 아이 추가</button></div></div>
+    <div class="card"><div class="row"><button class="btn primary" id="mgrdone">완료</button>
+    <button class="btn" id="newlist">+ 새 목록</button>
+    ${R.lists.length>1?`<button class="btn ${conf==="L"+l.id?"danger":""}" id="dellist">${conf==="L"+l.id?"정말 이 목록 삭제":"이 목록 삭제"}</button>`:""}</div>
+    <p class="hint">새 목록은 빈 명단으로 시작합니다. 목록마다 오늘 작성 내용이 따로 저장됩니다.</p></div>`;
 }
 function summary(){
-  const done=ROSTER.map((c,j)=>has(j)?`<div class="entry"><div class="entry-head"><h3>${esc(c.n)}</h3><button class="btn small" data-copy="${j}">복사</button></div><p>${esc(S.items[j].text||("키워드: "+S.items[j].kw.trim()))}</p></div>`:"").join("");
-  const skipped=ROSTER.filter((c,j)=>!has(j)).map(c=>c.n);
+  const done=kids().map(k=>has(k)?`<div class="entry"><div class="entry-head"><h3>${esc(label(k))}</h3><button class="btn small" data-copy="${esc(k.id)}">복사</button></div><p>${esc(it(k).text||("키워드: "+it(k).kw.trim()))}</p></div>`:"").join("");
+  const skipped=kids().filter(k=>!has(k)).map(k=>label(k));
   return `<div class="card summary"><p class="q">오늘 활동지 정리</p>
     <p class="hint">아이별 복사 버튼으로 한 명씩 복사할 수 있습니다.</p>
     <div class="grid">${done}</div>
@@ -135,51 +188,80 @@ function summary(){
     ${sample?"":`<p class="hint">자동 작성이 꺼져 있어 키워드만 정리했습니다. 이 내용을 대화창에 붙여 넣고 아이별 일지로 써 달라고 요청하세요.</p>`}</div>`;
 }
 async function copy(text,btn){
-  try{await navigator.clipboard.writeText(text);btn.textContent="복사됨";if(btn.classList.contains("small"))setTimeout(()=>{btn.textContent="복사"},1500)}
-  catch(e){btn.textContent="복사 실패"}
+  const small=btn.classList.contains("small"),orig=btn.textContent;
+  try{await navigator.clipboard.writeText(text);btn.textContent="복사됨"}catch(e){btn.textContent="복사 실패"}
+  if(small)setTimeout(()=>{btn.textContent=orig},1500);
 }
 function allText(){
-  return ROSTER.map((c,j)=>has(j)?`[${c.n}]\n${S.items[j].text||("키워드: "+S.items[j].kw.trim())}`:null).filter(Boolean).join("\n\n")
+  return kids().filter(has).map(k=>`[${label(k)}]\n${it(k).text||("키워드: "+it(k).kw.trim())}`).join("\n\n")
+}
+function dropKid(id){Object.values(D.byList).forEach(d=>{delete d.items[id]})}
+function leaveMgr(){
+  // 이름을 비워 둔 아이는 명단에서 뺀다
+  R.lists.forEach(l=>{l.kids=l.kids.filter(k=>{if(k.n.trim())return true;dropKid(k.id);return false})});
+  conf="";mgr=false;save();render();
 }
 function bind(){
   const g=id=>document.getElementById(id);
-  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{if(!busy)go(+b.dataset.go)});
-  if(g("kw"))g("kw").oninput=e=>{const it=S.items[S.i];it.kw=e.target.value;if(it.kw.trim())it.skipped=false;save();updateBtn()};
-  if(g("next"))g("next").onclick=()=>{if(S.i<ROSTER.length-1)go(S.i+1);else{save();render()}};
-  if(g("skip"))g("skip").onclick=()=>{const it=S.items[S.i];it.skipped=!it.skipped;save();if(it.skipped&&S.i<ROSTER.length-1)go(S.i+1);else render()};
+  const lock=f=>(...a)=>{if(!busy)f(...a)};
+  document.querySelectorAll("[data-list]").forEach(b=>b.onclick=lock(()=>{if(mgr){R.lists.forEach(l=>{l.kids=l.kids.filter(k=>k.n.trim()||(dropKid(k.id),false))})}R.cur=b.dataset.list;conf="";err="";save();render()}));
+  if(g("mgr"))g("mgr").onclick=lock(()=>{if(mgr)leaveMgr();else{mgr=true;conf="";render()}});
+  if(g("mgr2"))g("mgr2").onclick=()=>{mgr=true;render()};
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=lock(()=>go(+b.dataset.go)));
+  const d=day();
+  if(g("kw"))g("kw").oninput=e=>{const x=it(kids()[d.i]);x.kw=e.target.value;if(x.kw.trim())x.skipped=false;saveD();updateBtn()};
+  if(g("next"))g("next").onclick=()=>{if(d.i<kids().length-1)go(d.i+1);else{saveD();render()}};
+  if(g("skip"))g("skip").onclick=()=>{const x=it(kids()[d.i]);x.skipped=!x.skipped;saveD();if(x.skipped&&d.i<kids().length-1)go(d.i+1);else render()};
   if(g("batchmake"))g("batchmake").onclick=batchMake;
-  document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{const j=+b.dataset.copy;copy(S.items[j].text||S.items[j].kw.trim(),b)});
+  document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{const k=kids().find(k=>k.id===b.dataset.copy);copy(it(k).text||it(k).kw.trim(),b)});
   if(g("copyall"))g("copyall").onclick=e=>copy(allText(),e.target);
-  if(g("back"))g("back").onclick=()=>{S.finished=false;save();render()};
+  if(g("back"))g("back").onclick=()=>{d.finished=false;saveD();render()};
+  // 명단 관리
+  if(g("lname"))g("lname").oninput=e=>{L().name=e.target.value;saveR();const c=document.querySelector(`[data-list="${R.cur}"]`);if(c)c.textContent=e.target.value||"이름 없는 목록"};
+  document.querySelectorAll("[data-kn]").forEach(a=>a.oninput=e=>{kids()[+a.dataset.kn].n=e.target.value;saveR()});
+  document.querySelectorAll("[data-ka]").forEach(a=>a.oninput=e=>{kids()[+a.dataset.ka].age=e.target.value===""?"":+e.target.value;saveR()});
+  document.querySelectorAll("[data-ks]").forEach(a=>a.onchange=e=>{kids()[+a.dataset.ks].sex=e.target.value;saveR()});
+  document.querySelectorAll("[data-kdel]").forEach(b=>b.onclick=()=>{
+    const k=kids()[+b.dataset.kdel];
+    if(conf===k.id){L().kids=kids().filter(x=>x.id!==k.id);dropKid(k.id);conf="";save()}else conf=k.id;
+    render()});
+  if(g("addkid"))g("addkid").onclick=()=>{L().kids.push({id:uid(),n:"",age:5,sex:"남"});conf="";focusLast=true;saveR();render()};
+  if(g("newlist"))g("newlist").onclick=()=>{const l={id:uid(),name:"새 목록",kids:[]};R.lists.push(l);R.cur=l.id;conf="";focusLast=false;saveR();render();const n=g("lname");if(n){n.focus();n.select()}};
+  if(g("dellist"))g("dellist").onclick=()=>{
+    const l=L();
+    if(conf==="L"+l.id){R.lists=R.lists.filter(x=>x.id!==l.id);delete D.byList[l.id];R.cur=R.lists[0].id;conf="";save()}else conf="L"+l.id;
+    render()};
+  if(g("mgrdone"))g("mgrdone").onclick=leaveMgr;
 }
 function updateBtn(){
   const b=document.getElementById("batchmake");if(!b)return;
   const n=count();b.disabled=!n;b.textContent=sample?`${n}명 한 번에 작성`:`${n}명 정리하기`;
-  const c=document.querySelector(`[data-go="${S.i}"]`),it=S.items[S.i];
-  if(c){c.className="chip "+(it.skipped?"skipped":it.kw.trim()?"filled":"");c.innerHTML=esc(ROSTER[S.i].n)+(it.kw.trim()?"<small>입력됨</small>":"")}
+  const d=day(),k=kids()[d.i],c=document.querySelector(`[data-go="${d.i}"]`);
+  if(c){const x=it(k);c.className="chip "+(x.skipped?"skipped":x.kw.trim()?"filled":"");c.innerHTML=esc(label(k))+(x.kw.trim()?"<small>입력됨</small>":"")}
 }
 async function batchMake(){
-  const idx=ROSTER.map((c,j)=>j).filter(has);
-  if(!idx.length)return;
-  if(!sample){S.finished=true;save();render();return}
+  const list=kids().filter(has);
+  if(!list.length)return;
+  const d=day();
+  if(!sample){d.finished=true;saveD();render();return}
   // 키워드가 바뀐 아이만 다시 작성한다
-  const todo=idx.filter(j=>!S.items[j].text||S.items[j].gen!==S.items[j].kw.trim());
+  const todo=list.filter(k=>!it(k).text||it(k).gen!==it(k).kw.trim());
   busy=true;err="";let done=0;progress=`작성 중 0/${todo.length}`;render();
   const failed=[],queue=todo.slice();
   async function worker(){
     while(queue.length){
-      const j=queue.shift(),it=S.items[j];
-      try{const r=await sample(prompt(ROSTER[j],it.kw.trim()),{cache:false});it.text=r.text.trim();it.gen=it.kw.trim()}
-      catch(e){failed.push(ROSTER[j].n);it.text=""}
+      const k=queue.shift(),x=it(k);
+      try{const r=await sample(prompt(k,x.kw.trim()),{cache:false});x.text=r.text.trim();x.gen=x.kw.trim()}
+      catch(e){failed.push(label(k));x.text=""}
       done++;progress=`작성 중 ${done}/${todo.length}`;const b=document.getElementById("batchmake");if(b)b.textContent=progress;
     }
   }
   await Promise.all([worker(),worker(),worker()]);
   busy=false;
   if(failed.length)err=`${failed.join(", ")}은(는) 작성에 실패했습니다. 버튼을 다시 눌러 주세요.`;
-  else S.finished=true;
+  else d.finished=true;
   save();render();
 }
-render();
+save();render();
 (async()=>{try{const s=await window.claude?.use("sample");if(s){sample=s;if(!busy)render()}}catch(e){}})();
 </script>
