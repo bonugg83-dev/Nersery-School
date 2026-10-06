@@ -42,8 +42,12 @@ button.ghost{border-color:transparent;color:var(--muted)}
 button:disabled{opacity:.5;cursor:default}
 .note{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px}
 .summary{display:flex;flex-direction:column;gap:16px}
-.entry h3{margin:0 0 4px;font-size:15px}
+.entry{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--bg)}
+.entry-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.entry h3{margin:0;font-size:15px}
+button.small{font-size:13px;padding:4px 12px}
 .entry p{margin:0;white-space:pre-wrap}
+.entry.skip{background:transparent;border-style:dashed}
 .entry.skip p{color:var(--skip)}
 .tabs{display:flex;gap:4px;background:var(--line);padding:3px;border-radius:9px;align-self:flex-start}
 .tab{font:inherit;font-size:13px;border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:7px;cursor:pointer}
@@ -107,14 +111,15 @@ function render(){
   $.innerHTML=head+strip+body+fin;bind();
 }
 function summary(){
-  const parts=ROSTER.map((c,j)=>has(j)?`<div class="entry"><h3>${esc(c.n)}</h3><p>${esc(S.items[j].text||("키워드: "+S.items[j].kw.trim()))}</p></div>`:`<div class="entry skip"><h3>${esc(c.n)}</h3><p>건너뜀</p></div>`).join("");
-  return `<div class="card summary"><p class="q">오늘 활동지 정리</p>${parts}
-    <div class="row"><button class="btn primary" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button></div>
+  const parts=ROSTER.map((c,j)=>has(j)?`<div class="entry"><div class="entry-head"><h3>${esc(c.n)}</h3><button class="btn small" data-copy="${j}">복사</button></div><p>${esc(S.items[j].text||("키워드: "+S.items[j].kw.trim()))}</p></div>`:`<div class="entry skip"><div class="entry-head"><h3>${esc(c.n)}</h3></div><p>건너뜀</p></div>`).join("");
+  return `<div class="card summary"><p class="q">오늘 활동지 정리</p>
+    <p class="hint">아이별 복사 버튼으로 한 명씩 복사할 수 있습니다.</p>${parts}
+    <div class="row"><button class="btn" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button></div>
     ${sample?"":`<p class="hint">자동 작성이 꺼져 있어 키워드만 정리했습니다. 이 내용을 대화창에 붙여 넣고 아이별 일지로 써 달라고 요청하세요.</p>`}</div>`;
 }
 async function copy(text,btn){
-  try{await navigator.clipboard.writeText(text);btn.textContent="복사됨"}
-  catch(e){btn.textContent="복사하지 못했습니다. 직접 선택해 복사하세요."}
+  try{await navigator.clipboard.writeText(text);btn.textContent="복사됨";if(btn.classList.contains("small"))setTimeout(()=>{btn.textContent="복사"},1500)}
+  catch(e){btn.textContent="복사 실패"}
 }
 function allText(){
   return ROSTER.map((c,j)=>has(j)?`[${c.n}]\n${S.items[j].text||("키워드: "+S.items[j].kw.trim())}`:null).filter(Boolean).join("\n\n")
@@ -126,6 +131,7 @@ function bind(){
   if(g("next"))g("next").onclick=()=>{if(S.i<ROSTER.length-1)go(S.i+1);else{save();render()}};
   if(g("skip"))g("skip").onclick=()=>{const it=S.items[S.i];it.skipped=!it.skipped;save();if(it.skipped&&S.i<ROSTER.length-1)go(S.i+1);else render()};
   if(g("batchmake"))g("batchmake").onclick=batchMake;
+  document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{const j=+b.dataset.copy;copy(S.items[j].text||S.items[j].kw.trim(),b)});
   if(g("copyall"))g("copyall").onclick=e=>copy(allText(),e.target);
   if(g("back"))g("back").onclick=()=>{S.finished=false;save();render()};
 }
