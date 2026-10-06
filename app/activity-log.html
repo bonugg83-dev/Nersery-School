@@ -154,11 +154,13 @@ const kids=()=>L().kids;
 const day=()=>D.byList[R.cur]||(D.byList[R.cur]={i:0,finished:false,items:{}});
 const it=k=>day().items[k.id]||(day().items[k.id]={kw:"",skipped:false,text:"",gen:""});
 const has=k=>it(k).kw.trim().length>0&&!it(k).skipped;
+const hasAny=()=>kids().some(k=>{const x=it(k);return x.kw.trim()||x.text||x.skipped});
+const resetBtn=()=>`<button class="btn small ${conf==="reset"?"danger":"ghost"}" id="reset" ${busy||!hasAny()?"disabled":""}>${conf==="reset"?"정말 모두 지우기":"작성 내용 모두 지우기"}</button>`;
 const count=()=>kids().filter(has).length;
 const label=k=>k.n.trim()||"(이름 없음)";
 const info=k=>[k.age?k.age+"세":"",k.sex||""].filter(Boolean).join(" ");
 const prompt=(k,kw)=>`${TONE}\n\n아이: ${label(k)}${info(k)?` (${info(k).replace(" ",", ")})`:""}\n교사가 적은 오늘 활동: ${kw}\n\n${label(k)}의 오늘 활동일지 본문만 쓴다.`;
-function go(j){day().i=j;err="";saveD();render()}
+function go(j){conf="";day().i=j;err="";saveD();render()}
 function clampI(){const d=day(),n=kids().length;if(d.i>=n)d.i=Math.max(0,n-1)}
 
 function listbar(){
@@ -188,8 +190,8 @@ function render(){
   const n=count();
   const fin=`<div class="card">${sample?"":`<div class="note">자동 작성을 쓸 수 없는 화면입니다. 키워드를 정리해 대화창에 붙여 넣을 수 있게 만듭니다.</div>`}
     ${err?`<div class="note">${esc(err)}</div>`:""}
-    <div class="row"><button class="btn primary" id="batchmake" ${busy||!n?"disabled":""}>${busy?progress:(sample?`${n}명 한 번에 작성`:`${n}명 정리하기`)}</button></div>
-    <p class="hint">적지 않은 아이는 자동으로 건너뜁니다.</p></div>`;
+    <div class="row"><button class="btn primary" id="batchmake" ${busy||!n?"disabled":""}>${busy?progress:(sample?`${n}명 한 번에 작성`:`${n}명 정리하기`)}</button>${resetBtn()}</div>
+    <p class="hint">적지 않은 아이는 자동으로 건너뜁니다. 지우기는 이 목록의 오늘 작성 내용만 지우고 명단은 그대로 둡니다.</p></div>`;
   $.innerHTML=head+listbar()+strip+body+fin;bind();
 }
 function manager(){
@@ -217,7 +219,7 @@ function summary(){
     <p class="hint">아이별 복사 버튼으로 한 명씩 복사할 수 있습니다.</p>
     <div class="grid">${done}</div>
     ${skipped.length?`<p class="skipline">건너뜀: ${skipped.map(esc).join(", ")}</p>`:""}
-    <div class="row"><button class="btn" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button></div>
+    <div class="row"><button class="btn" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button>${resetBtn()}</div>
     ${sample?"":`<p class="hint">자동 작성이 꺼져 있어 키워드만 정리했습니다. 이 내용을 대화창에 붙여 넣고 아이별 일지로 써 달라고 요청하세요.</p>`}</div>`;
 }
 async function copy(text,btn){
@@ -245,6 +247,9 @@ function bind(){
   if(g("kw"))g("kw").oninput=e=>{const x=it(kids()[d.i]);x.kw=e.target.value;if(x.kw.trim())x.skipped=false;saveD();updateBtn()};
   if(g("next"))g("next").onclick=()=>{if(d.i<kids().length-1)go(d.i+1);else{saveD();render()}};
   if(g("skip"))g("skip").onclick=()=>{const x=it(kids()[d.i]);x.skipped=!x.skipped;saveD();if(x.skipped&&d.i<kids().length-1)go(d.i+1);else render()};
+  if(g("reset"))g("reset").onclick=()=>{
+    if(conf==="reset"){D.byList[R.cur]={i:0,finished:false,items:{}};conf="";err="";saveD();render()}
+    else{conf="reset";render();setTimeout(()=>{if(conf==="reset"){conf="";render()}},4000)}};
   if(g("batchmake"))g("batchmake").onclick=batchMake;
   document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>{const k=kids().find(k=>k.id===b.dataset.copy);copy(it(k).text||it(k).kw.trim(),b)});
   if(g("copyall"))g("copyall").onclick=e=>copy(allText(),e.target);
