@@ -1,0 +1,152 @@
+<title>활동지</title>
+<style>
+/* Layout: one-column working screen. Child strip on top, one child card in the middle, actions below. */
+:root{
+  --bg:#f6f7f4; --surface:#ffffff; --fg:#23302b; --muted:#68766f; --line:#dfe4de;
+  --accent:#2f7d62; --accent-fg:#ffffff; --accent-soft:#e3f1ea;
+  --warn:#9a6a1a; --warn-soft:#f6ecd6; --skip:#8a948f;
+  --font-display:'Gowun Dodum','Noto Sans KR',system-ui,sans-serif;
+  --font-body:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#171c1a; --surface:#202723; --fg:#e7ece8; --muted:#9aa8a0; --line:#323c37;
+  --accent:#58b894; --accent-fg:#10201a; --accent-soft:#233a30;
+  --warn:#e2b765; --warn-soft:#3a3120; --skip:#7d8982; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#171c1a; --surface:#202723; --fg:#e7ece8; --muted:#9aa8a0; --line:#323c37;
+  --accent:#58b894; --accent-fg:#10201a; --accent-soft:#233a30;
+  --warn:#e2b765; --warn-soft:#3a3120; --skip:#7d8982; color-scheme:dark;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.7;margin:0;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:16px;min-width:0}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--font-display);font-size:24px;margin:0;font-weight:400}
+.date{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.strip{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font:inherit;font-size:13px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.chip:focus-visible,button:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip[aria-current="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.chip.done{background:var(--accent-soft);border-color:transparent}
+.chip.skipped{color:var(--skip);text-decoration:line-through}
+.chip small{color:var(--muted);font-size:11px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.q{font-family:var(--font-display);font-size:21px;margin:0;line-height:1.5}
+.meta{color:var(--muted);font-size:13px;margin:0}
+textarea{width:100%;min-height:96px;resize:vertical;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px}
+textarea.result{min-height:190px;background:var(--surface)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button.btn{font:inherit;font-size:14px;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.ghost{border-color:transparent;color:var(--muted)}
+button:disabled{opacity:.5;cursor:default}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px}
+.summary{display:flex;flex-direction:column;gap:16px}
+.entry h3{margin:0 0 4px;font-size:15px}
+.entry p{margin:0;white-space:pre-wrap}
+.entry.skip p{color:var(--skip)}
+.hint{color:var(--muted);font-size:12px}
+</style>
+
+<div class="wrap" id="app"></div>
+
+<script>
+const ROSTER=[
+  {n:"앤디",age:5,sex:"남"},{n:"비니",age:6,sex:"여"},{n:"쿠시",age:5,sex:"여"},
+  {n:"데니",age:4,sex:"남"},{n:"에반",age:6,sex:"남"},{n:"퍼지",age:7,sex:"여"},
+  {n:"고유",age:5,sex:"남"},{n:"헨디",age:6,sex:"여"},{n:"이루",age:7,sex:"남"}
+];
+const TONE=`너는 어린이집 담임 교사다. 아래 키워드나 문장을 바탕으로 보호자에게 전하는 하루 활동일지를 쓴다.
+- 7줄 정도로 쓴다. 한 줄에 한 문장씩, 줄바꿈으로 구분한다.
+- 따뜻하고 평범한 교사 말투로 쓴다. '~했습니다', '~하는 모습이었습니다', '~해 보았습니다'를 쓴다.
+- 이모티콘은 쓰지 않는다. 과장하거나 문학적인 표현은 쓰지 않는다.
+- 교사가 준 내용에 없는 사실, 대사, 시간, 횟수, 감정은 지어내지 않는다. 입력이 적으면 줄 수를 줄여도 된다.
+- 아이를 평가하거나 단정하지 않고 관찰한 모습 중심으로 쓴다. 부정적인 행동은 비난 없이 부드럽게 쓴다.
+- 식사, 낮잠, 건강 내용은 교사가 말한 것만 쓴다.
+- 제목, 설명, 머리말 없이 일지 본문만 출력한다. 첫 줄은 '오늘' 활동으로 시작한다.`;
+const KEY="activity-log-"+new Date().toISOString().slice(0,10);
+let S={i:0,items:ROSTER.map(()=>({status:"todo",kw:"",text:""})),finished:false};
+try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.items&&s.items.length===ROSTER.length)S=s}catch(e){}
+let sample=null,busy=false,err="";
+const $=document.getElementById("app");
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const mark=s=>({done:"완료",skipped:"건너뜀",todo:""}[s]);
+const allHandled=()=>S.items.every(x=>x.status!=="todo");
+function nextTodo(from){for(let k=1;k<=ROSTER.length;k++){const j=(from+k)%ROSTER.length;if(S.items[j].status==="todo")return j}return -1}
+function go(j){S.i=j;err="";save();render()}
+function advance(){const j=nextTodo(S.i);if(j>=0)go(j);else{render()}}
+
+function render(){
+  const date=new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric",weekday:"short"});
+  const head=`<header><h1>활동지</h1><span class="date">${date}</span></header>`;
+  const strip=`<nav class="strip" aria-label="아이 목록">`+ROSTER.map((c,j)=>{
+    const st=S.items[j].status;
+    return `<button class="chip ${st}" data-go="${j}" aria-current="${!S.finished&&j===S.i}">${esc(c.n)}${st!=="todo"?`<small>${mark(st)}</small>`:""}</button>`}).join("")+`</nav>`;
+  if(S.finished){$.innerHTML=head+strip+summary();bind();return}
+  const c=ROSTER[S.i],it=S.items[S.i];
+  const doneCount=S.items.filter(x=>x.status==="done").length;
+  let body;
+  if(it.text){
+    body=`<div class="card"><p class="meta">${S.i+1}/${ROSTER.length} · ${esc(c.n)} (${c.age}세 ${c.sex})</p>
+      <p class="q">${esc(c.n)}의 오늘 활동일지</p>
+      <textarea class="result" id="res" aria-label="작성된 활동일지">${esc(it.text)}</textarea>
+      <p class="hint">내용을 직접 고쳐도 됩니다.</p>
+      ${err?`<div class="note">${esc(err)}</div>`:""}
+      <div class="row"><button class="btn primary" id="copy">복사</button>
+      <button class="btn" id="regen">${sample?"다시 작성":"키워드 수정"}</button>
+      <button class="btn" id="next">${nextTodo(S.i)>=0?"다음 아이":"확인"}</button></div></div>`;
+  }else{
+    body=`<div class="card"><p class="meta">${S.i+1}/${ROSTER.length} · ${c.age}세 ${c.sex}</p>
+      <p class="q">오늘 '${esc(c.n)}'의 하루는 어땠나요?</p>
+      <textarea id="kw" placeholder="키워드나 짧은 문장으로 적어 주세요. 예: 블록놀이, 친구와 길 만들기, 점심 잘 먹음, 낮잠 1시간" aria-label="활동 키워드">${esc(it.kw)}</textarea>
+      ${sample?"":`<div class="note">자동 작성을 쓸 수 없는 화면입니다. 키워드를 저장해 두고, 마지막에 완료를 누르면 대화창에 붙여 넣을 정리본을 만듭니다.</div>`}
+      ${err?`<div class="note">${esc(err)}</div>`:""}
+      <div class="row"><button class="btn primary" id="make" ${busy?"disabled":""}>${busy?"작성 중...":(sample?"일지 작성":"저장하고 다음")}</button>
+      <button class="btn ghost" id="skip" ${busy?"disabled":""}>건너뛰기</button></div></div>`;
+  }
+  const fin=`<div class="row"><button class="btn ${allHandled()?"primary":""}" id="finish" ${doneCount===0&&!allHandled()?"disabled":""}>완료 (${doneCount}명 작성)</button></div>`;
+  $.innerHTML=head+strip+body+fin;bind();
+}
+function summary(){
+  const parts=S.items.map((x,j)=>x.status==="done"?`<div class="entry"><h3>${esc(ROSTER[j].n)}</h3><p>${esc(x.text||x.kw)}</p></div>`:`<div class="entry skip"><h3>${esc(ROSTER[j].n)}</h3><p>${x.status==="skipped"?"건너뜀":"작성 안 함"}</p></div>`).join("");
+  return `<div class="card summary"><p class="q">오늘 활동지 정리</p>${parts}
+    <div class="row"><button class="btn primary" id="copyall">전체 복사</button><button class="btn" id="back">돌아가서 수정</button></div>
+    ${sample?"":`<p class="hint">자동 작성이 꺼져 있어 키워드만 정리했습니다. 이 내용을 대화창에 붙여 넣고 아이별 일지로 써 달라고 요청하세요.</p>`}</div>`;
+}
+async function copy(text,btn){
+  try{await navigator.clipboard.writeText(text);btn.textContent="복사됨"}
+  catch(e){const t=document.getElementById("res");if(t){t.focus();t.select()}btn.textContent="직접 복사하세요(Ctrl+C)"}
+}
+function allText(){
+  return S.items.map((x,j)=>x.status==="done"?`[${ROSTER[j].n}]\n${x.text||("키워드: "+x.kw)}`:null).filter(Boolean).join("\n\n")
+}
+function bind(){
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{S.finished=false;go(+b.dataset.go)});
+  const g=id=>document.getElementById(id);
+  if(g("kw"))g("kw").oninput=e=>{S.items[S.i].kw=e.target.value;save()};
+  if(g("res"))g("res").oninput=e=>{S.items[S.i].text=e.target.value;save()};
+  if(g("skip"))g("skip").onclick=()=>{S.items[S.i].status="skipped";save();advance()};
+  if(g("make"))g("make").onclick=make;
+  if(g("copy"))g("copy").onclick=e=>copy(g("res").value,e.target);
+  if(g("regen"))g("regen").onclick=()=>{S.items[S.i].text="";S.items[S.i].status="todo";save();render()};
+  if(g("next"))g("next").onclick=advance;
+  if(g("finish"))g("finish").onclick=()=>{S.finished=true;save();render()};
+  if(g("copyall"))g("copyall").onclick=e=>copy(allText(),e.target);
+  if(g("back"))g("back").onclick=()=>{S.finished=false;render()};
+}
+async function make(){
+  const it=S.items[S.i],c=ROSTER[S.i];
+  const kw=(document.getElementById("kw").value||"").trim();
+  it.kw=kw;
+  if(!kw){err="활동 내용을 적거나 건너뛰기를 눌러 주세요.";render();return}
+  if(!sample){it.status="done";it.text="";save();advance();return}
+  busy=true;err="";render();
+  try{
+    const r=await sample(`${TONE}\n\n아이: ${c.n} (${c.age}세, ${c.sex})\n교사가 적은 오늘 활동: ${kw}\n\n${c.n}의 오늘 활동일지 본문만 쓴다.`,{cache:false});
+    it.text=r.text.trim();it.status="done";
+  }catch(e){err=e&&e.code==="not_granted"?"자동 작성이 허용되지 않았습니다.":"작성에 실패했습니다. 다시 시도해 주세요."}
+  busy=false;save();render();
+}
+render();
+(async()=>{try{const s=await window.claude?.use("sample");if(s){sample=s;render()}}catch(e){}})();
+</script>

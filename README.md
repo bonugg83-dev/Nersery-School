@@ -11,6 +11,8 @@
 | [knowledge/02-tone-samples.md](knowledge/02-tone-samples.md) | 말투 참고 예시 | 실제 활동일지 예시 10~20개 넣기 |
 | [knowledge/03-writing-rules.md](knowledge/03-writing-rules.md) | 작성 규칙 | 우리 반 규칙·금지 표현 다듬기 |
 | [knowledge/04-keyword-template.md](knowledge/04-keyword-template.md) | 키워드 입력 양식 | 참고용 |
+| [docs/architecture.md](docs/architecture.md) | "활동지" 흐름 설계 | 참고용 |
+| [app/activity-log.html](app/activity-log.html) | 활동지 화면 소스 | 참고용 |
 | [docs/project-plan.md](docs/project-plan.md) | 원본 계획서 | 참고용 |
 
 ## 사용 방법
